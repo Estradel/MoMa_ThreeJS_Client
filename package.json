@@ -1,0 +1,18 @@
+{
+  "name": "bun-anim-client",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "vite": "^7.2.4",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@types/three": "^0.181.0",
+    "three": "^0.181.2"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  }
+}
