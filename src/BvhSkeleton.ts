@@ -1,105 +1,108 @@
-﻿import * as THREE from "three";
-import type {SkeletonInitMsg} from "./network.ts";
-import {Object3D} from "three";
+﻿import * as THREE from 'three';
+import type {SkeletonDef} from "./type.ts";
 
 export class BvhSkeleton {
+    public root: THREE.Group;
+    public skeleton: THREE.Skeleton;
+    public bones: THREE.Bone[] = [];
 
-    private bonesMeshes: THREE.Object3D[] = [];
-    private root: THREE.Object3D;
-    private isInitialized: boolean = false;
-
-    constructor() {
+    constructor(data: SkeletonDef) {
         this.root = new THREE.Group();
+        this.bones = [];
 
-        // Move the root by a random offset for better visibility when multiple skeletons are present
-        const offsetX = (Math.random() - 0.5) * 50;
-        const offsetZ = (Math.random() - 0.5) * 50;
-        this.root.position.set(offsetX, 0, offsetZ);
-    }
+        // 1. Création des os
+        for (let i = 0; i < data.bone_names.length; i++) {
+            const bone = new THREE.Bone();
+            bone.name = data.bone_names[i];
 
-    get Root(): Object3D {
-        return this.root;
-    }
+            // Configuration importante pour manipuler la matrice directement
+            bone.matrixAutoUpdate = false;
 
-    public initializeSkeleton(data: SkeletonInitMsg): Object3D {
-        // Nettoyage
-        for (const b of this.bonesMeshes) {
-            // On retire du parent (scene ou autre os)
-            if (b.parent) b.parent.remove(b);
-        }
-        this.bonesMeshes = [];
-
-        console.log(`Initialisation squelette avec ${data.bone_names.length} os.`);
-
-        for (const [i, name] of data.bone_names.entries()) {
-            // Visuel : Axes + Cube
-            const boneObj = new THREE.AxesHelper(0.3); // Plus petit pour lisibilité
-            const geometry = new THREE.BoxGeometry(0.05, 0.05, 0.05);
-            const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
-            const cube = new THREE.Mesh(geometry, material);
-            boneObj.add(cube);
-
-            boneObj.name = name;
-
-            // IMPORTANT : Réactiver l'update auto car ThreeJS va calculer le FK
-            boneObj.matrixAutoUpdate = false;
-
-            // Appliquer la Bind Pose (Pose de repos locale)
-            const pos = data.bind_pose.positions[i];
-            const rot = data.bind_pose.rotations[i];
-            const scl = data.bind_pose.scales[i];
-
-            boneObj.position.set(pos[0], pos[1], pos[2]);
-            boneObj.quaternion.set(rot[0], rot[1], rot[2], rot[3]);
-            boneObj.scale.set(scl[0], scl[1], scl[2]);
-
-            this.bonesMeshes.push(boneObj);
+            this.bones.push(bone);
         }
 
-        // 2. Reconstruction de l'arbre (Parenting)
-        for (const [childIdx, parentIdx] of data.parents.entries()) {
-            const childBone = this.bonesMeshes[childIdx];
+        // 2. Reconstruction de la hiérarchie
+        // Le tableau 'parents' donne l'index du parent pour chaque os (-1 si root)
+        for (let i = 0; i < data.parents.length; i++) {
+            const parentIdx = data.parents[i];
+            const bone = this.bones[i];
 
             if (parentIdx === -1) {
-                // C'est une racine (Root), on l'ajoute à la scène
-                this.root.add(childBone);
+                // C'est un os racine
+                this.root.add(bone);
             } else {
-                // On l'ajoute à son parent
-                // Three.js gère la transformation relative automatiquement
-                const parentBone = this.bonesMeshes[parentIdx];
-                parentBone.add(childBone);
+                // On l'attache à son parent
+                this.bones[parentIdx].add(bone);
             }
 
-            childBone.updateMatrix();
+            // 3. Application de la Bind Pose (optionnel mais recommandé pour avoir une pose par défaut)
+            // Note: Le serveur envoie les matrices locales d'animation, donc la bind pose
+            // sert surtout si l'animation s'arrête ou pour le helper.
+            const p = data.bind_pose.positions[i];
+            const r = data.bind_pose.rotations[i]; // Quaternion [x, y, z, w]
+            const s = data.bind_pose.scales[i];
+
+            bone.position.set(p[0], p[1], p[2]);
+            bone.quaternion.set(r[0], r[1], r[2], r[3]);
+            bone.scale.set(s[0], s[1], s[2]);
+            bone.updateMatrix(); // Applique pos/rot/scl à la matrice locale
         }
 
-        this.isInitialized = true;
-        return this.root;
+        // Création de l'objet Skeleton de ThreeJS (utile pour les SkinnedMesh ou SkeletonHelper)
+        this.skeleton = new THREE.Skeleton(this.bones);
+
+        // Ajout d'un helper pour visualiser
+        const helper = new THREE.SkeletonHelper(this.root);
+        this.root.add(helper);
     }
 
     /**
-     * Appelé à chaque frame binaire reçue.
-     * @param floatData Le tableau plat de floats contenant toutes les matrices
+     * Met à jour la pose à partir d'un buffer binaire (Float64Array) reçu du WebSocket.
+     * Le buffer contient une suite de matrices 4x4 (16 floats par os).
      */
-    public updatePose(floatData: Float32Array) {
-        if (!this.isInitialized) return;
+    public updateFromBinary(buffer: ArrayBuffer) {
+        // Le serveur Python envoie du float64 (double precision)
+        const view = new Float64Array(buffer);
 
         // Une matrice 4x4 contient 16 floats
         const MATRIX_SIZE = 16;
 
         // Sécurité
-        const numBones = Math.min(this.bonesMeshes.length, Math.floor(floatData.length / MATRIX_SIZE));
+        const numBones = Math.min(this.bones.length, Math.floor(view.length / MATRIX_SIZE));
 
         for (let i = 0; i < numBones; i++) {
-            const bone = this.bonesMeshes[i];
+            const bone = this.bones[i];
             const offset = i * MATRIX_SIZE;
 
             // Charger la matrice depuis le buffer
             // NumPy envoie en Row-Major, ThreeJS attend du Column-Major
-            bone.matrix.fromArray(floatData, offset);
+            bone.matrix.fromArray(view, offset);
             bone.matrix.transpose();
 
             // console.log(new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld));
         }
+
+        // // Vérification de sécurité
+        // if (view.length < this.bones.length * 16) return;
+        //
+        // for (let i = 0; i < this.bones.length; i++) {
+        //     const bone = this.bones[i];
+        //
+        //     // On récupère la tranche correspondant à la matrice de cet os
+        //     // Attention: ThreeJS utilise column-major, NumPy est souvent row-major.
+        //     // Mais la méthode 'tobytes()' de NumPy aplatit ligne par ligne (C-order).
+        //     // ThreeJS .fromArray() lit en column-major par défaut.
+        //     // Si l'affichage est distordu, il faudra utiliser .transpose() côté serveur ou gérer ici.
+        //     // Pour l'instant, assumons que l'ordre des éléments correspond ou que le serveur envoie transposé.
+        //
+        //     // Note: Si le serveur envoie Row-Major (standard NumPy), il faut transposer pour ThreeJS.
+        //     // Mais une méthode simple est de charger et d'indiquer à ThreeJS de transposer si besoin.
+        //     // Ici, on charge brute.
+        //     bone.matrix.fromArray(view, i * 16);
+        //
+        //     // Comme c'est du Row-Major (NumPy) et que ThreeJS veut Column-Major,
+        //     // il faut souvent transposer la matrice reçue.
+        //     bone.matrix.transpose();
+        // }
     }
 }
