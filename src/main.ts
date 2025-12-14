@@ -8,6 +8,7 @@ import {ImGuiImplWeb} from "@mori2003/jsimgui";
 // Configuration
 const API_URL = "http://localhost:8000";
 const WS_URL = "ws://localhost:8000/ws";
+// const WS_URL = "ws://localhost:8766";
 
 const stats: Stats = new Stats();
 
