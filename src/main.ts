@@ -4,13 +4,27 @@ import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "three/examples/jsm/libs/stats.module.js";
 import * as GUI from "./gui.ts";
 import {ImGuiImplWeb} from "@mori2003/jsimgui";
+import type {GlobalData} from "./DataInterface.ts";
+import {sendGetRequest, sendPostRequest} from "./tools.ts";
 
 // Configuration
 const API_URL = "http://localhost:8000";
 const WS_URL = "ws://localhost:8000/ws";
 // const WS_URL = "ws://localhost:8766";
 
+const globalData: GlobalData = {
+    SESSION_ID: ["6543"],
+    API_URL: ["http://localhost:8000"],
+    WS_URL: ["ws://localhost:8000/ws"],
+    ANIMATIONS: [""],
+    SELECTED_ANIMATION: [0],
+    play: [true],
+    connected: [true],
+}
+
+const gui = new GUI.GUI();
 const stats: Stats = new Stats();
+let bvhAnim: BvhSkeleton;
 
 async function init() {
     stats.showPanel(0);
@@ -30,53 +44,84 @@ async function init() {
     const grid = new THREE.GridHelper(1000, 50);
     scene.add(grid);
 
-    // 2. Récupération de la définition du squelette (API REST)
-    console.log("Récupération du squelette...");
-    const response = await fetch(`${API_URL}/skeleton`);
-    const skeletonDef = await response.json();
+    // Récupération de la liste des animations disponibles (API REST)
+    // + Formatage pour ImGui Combo
+    let anim_response = await sendGetRequest(`${globalData.API_URL[0]}/animations`)
+    globalData.ANIMATIONS = anim_response.animations;
 
-    // 3. Construction du squelette
-    const bvhAnim = new BvhSkeleton(skeletonDef);
-    scene.add(bvhAnim.root);
-    console.log("Squelette construit.");
+    console.log("Création d'une session...");
+    let session_id: string = globalData.SESSION_ID[0];
+    const sessionInfo = await sendPostRequest(`${globalData.API_URL[0]}/sessions`, JSON.stringify({
+        session_id: globalData.SESSION_ID[0],
+        animation_file: "07_01.bvh"
+    }))
 
-    // 4. Connexion WebSocket pour le streaming
-    const ws = new WebSocket(WS_URL);
-    ws.binaryType = "arraybuffer"; // Crucial pour recevoir des bytes et non du texte
+    session_id = sessionInfo.session_id || session_id;
+    console.log(sessionInfo);
+    console.log(session_id);
 
-    ws.onopen = () => {
-        console.log("Connecté au serveur d'animation !");
-    };
+    async function init_character() {
+        // 2. Récupération de la définition du squelette (API REST)
+        console.log("Récupération du squelette...");
+        const skeletonDef = await sendGetRequest(`${globalData.API_URL[0]}/sessions/${session_id}/skeleton`);
 
-    let lastMessageTime: number | null = null;
-    let messageCount = 0;
-    let totalElapsedTime = 0;
-    let lastPrintTime = performance.now();
-    ws.onmessage = (event) => {
-        if (event.data instanceof ArrayBuffer) {
-            const currentTime = performance.now();
+        // 3. Construction du squelette
+        bvhAnim = new BvhSkeleton(skeletonDef);
+        scene.add(bvhAnim.root);
+        console.log("Squelette construit.");
+    }
 
-            if (lastMessageTime !== null) {
-                const elapsed = currentTime - lastMessageTime;
-                totalElapsedTime += elapsed;
+    async function init_ws() {
+        // 4. Connexion WebSocket pour le streaming
+        // const ws = new WebSocket(WS_URL);
+        const ws = new WebSocket(`${globalData.WS_URL[0]}/${session_id}`);
+        ws.binaryType = "arraybuffer"; // Crucial pour recevoir des bytes et non du texte
 
-                // Afficher une fois par seconde
-                if (currentTime - lastPrintTime >= 1000) {
-                    const avgElapsed = totalElapsedTime / messageCount;
-                    console.log(`Temps moyen entre chaque frame: ${avgElapsed.toFixed(2)}ms | Messages reçus: ${messageCount}`);
-                    lastPrintTime = currentTime;
-                    totalElapsedTime = 0;
-                    messageCount = 0;
+        ws.onopen = () => {
+            console.log("Connecté au serveur d'animation !");
+        };
+
+        let lastMessageTime: number | null = null;
+        let messageCount = 0;
+        let totalElapsedTime = 0;
+        let lastPrintTime = performance.now();
+        ws.onmessage = (event) => {
+            if (event.data instanceof ArrayBuffer) {
+                const currentTime = performance.now();
+
+                if (lastMessageTime !== null) {
+                    const elapsed = currentTime - lastMessageTime;
+                    totalElapsedTime += elapsed;
+
+                    // Afficher une fois par seconde
+                    if (currentTime - lastPrintTime >= 1000) {
+                        const avgElapsed = totalElapsedTime / messageCount;
+                        console.log(`Temps moyen entre chaque frame: ${avgElapsed.toFixed(2)}ms | Messages reçus: ${messageCount}`);
+                        lastPrintTime = currentTime;
+                        totalElapsedTime = 0;
+                        messageCount = 0;
+                    }
                 }
+
+                lastMessageTime = currentTime;
+                messageCount++;
+                bvhAnim.updateFromBinary(event.data);
             }
+        };
 
-            lastMessageTime = currentTime;
-            messageCount++;
-            bvhAnim.updateFromBinary(event.data);
-        }
-    };
+        ws.onclose = () => {
+            console.log("Déconnecté du serveur d'animation.");
+        };
+        ws.onerror = (err) => console.error("Erreur WS:", err);
+    }
 
-    ws.onerror = (err) => console.error("Erreur WS:", err);
+    async function reset_character() {
+        console.log("Réinitialisation du personnage...");
+        scene.remove(bvhAnim.root);
+    }
+
+    await init_character();
+    await init_ws();
 
     // 5. Boucle de rendu
     function animate() {
@@ -84,7 +129,7 @@ async function init() {
         ImGuiImplWeb.BeginRender();
         stats.begin();
 
-        GUI.render();
+        gui.render(globalData);
         controls.update();
         renderer.render(scene, camera);
 
@@ -102,12 +147,19 @@ async function init() {
     // Gestion du resize
     window.addEventListener('resize', () => onWindowResize(), false);
 
-    GUI.InitializeGUI(renderer.domElement).then(_ => {
+    gui.initialize(renderer.domElement).then(_ => {
         // Boucle de rendu
         renderer.setAnimationLoop(time => {
             animate()
         });
     });
+    gui.onDeleteSessionCallback = async () => {
+        await reset_character();
+    };
+    gui.onCreateSessionCallback = async () => {
+        await init_character();
+        await init_ws();
+    };
 }
 
 init();

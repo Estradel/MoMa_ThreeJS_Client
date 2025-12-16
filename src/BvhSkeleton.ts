@@ -17,6 +17,7 @@ export class BvhSkeleton {
 
             // Configuration importante pour manipuler la matrice directement
             bone.matrixAutoUpdate = false;
+            bone.matrixWorldAutoUpdate = false;
 
             this.bones.push(bone);
         }
@@ -27,6 +28,7 @@ export class BvhSkeleton {
             const parentIdx = data.parents[i];
             const bone = this.bones[i];
 
+            // this.root.add(bone);
             if (parentIdx === -1) {
                 // C'est un os racine
                 this.root.add(bone);
@@ -76,33 +78,8 @@ export class BvhSkeleton {
 
             // Charger la matrice depuis le buffer
             // NumPy envoie en Row-Major, ThreeJS attend du Column-Major
-            bone.matrix.fromArray(view, offset);
-            bone.matrix.transpose();
-
-            // console.log(new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld));
+            bone.matrixWorld.fromArray(view, offset);
+            bone.matrixWorld.transpose();
         }
-
-        // // Vérification de sécurité
-        // if (view.length < this.bones.length * 16) return;
-        //
-        // for (let i = 0; i < this.bones.length; i++) {
-        //     const bone = this.bones[i];
-        //
-        //     // On récupère la tranche correspondant à la matrice de cet os
-        //     // Attention: ThreeJS utilise column-major, NumPy est souvent row-major.
-        //     // Mais la méthode 'tobytes()' de NumPy aplatit ligne par ligne (C-order).
-        //     // ThreeJS .fromArray() lit en column-major par défaut.
-        //     // Si l'affichage est distordu, il faudra utiliser .transpose() côté serveur ou gérer ici.
-        //     // Pour l'instant, assumons que l'ordre des éléments correspond ou que le serveur envoie transposé.
-        //
-        //     // Note: Si le serveur envoie Row-Major (standard NumPy), il faut transposer pour ThreeJS.
-        //     // Mais une méthode simple est de charger et d'indiquer à ThreeJS de transposer si besoin.
-        //     // Ici, on charge brute.
-        //     bone.matrix.fromArray(view, i * 16);
-        //
-        //     // Comme c'est du Row-Major (NumPy) et que ThreeJS veut Column-Major,
-        //     // il faut souvent transposer la matrice reçue.
-        //     bone.matrix.transpose();
-        // }
     }
 }

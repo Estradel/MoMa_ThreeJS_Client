@@ -1,30 +1,88 @@
-﻿import { ImGui, ImGuiImplWeb } from "@mori2003/jsimgui";
+﻿import {ImGui, ImGuiImplWeb} from "@mori2003/jsimgui";
 import {AnimationClient} from "./network.ts";
+import type {GlobalData} from "./DataInterface.ts";
+import {sendDeleteRequest, sendPostRequest} from "./tools.ts";
 
-export async function InitializeGUI(myCanvas: HTMLCanvasElement)
-{
-    await ImGuiImplWeb.Init({
-        canvas: myCanvas,
-        // device: myGPUDevice, // Required for WebGPU
-    });
+export class GUI {
+    private stopRotation: [boolean] = [false];
+    private cubeColor: [number, number, number] = [0.0, 0.0, 0.5];
 
-}
+    public onDeleteSessionCallback: (() => void) | null = null;
+    public onCreateSessionCallback: (() => void) | null = null;
 
-const stopRotation : [boolean] = [false]
-const cubeColor: [number, number, number] = [0.0, 0.0, 0.5];
-
-export function render() {
-
-
-    ImGui.Text("Hello, world!");
-    ImGui.Checkbox("Stop Rotation", stopRotation);
-    ImGui.Text("Rotate ? " + (stopRotation[0] ? "No" : "Yes"));
-
-    ImGui.ColorPicker3("cube.material.color", cubeColor);
-
-    if (ImGui.Button("Add BVH Skeleton")) {
-        console.log("Button clicked!");
-        AnimationClient.getInstance().AddClient();
+    public async initialize(myCanvas: HTMLCanvasElement): Promise<void> {
+        await ImGuiImplWeb.Init({
+            canvas: myCanvas,
+            // device: myGPUDevice, // Required for WebGPU
+        });
     }
 
+    public render(globalData: GlobalData): void
+    {
+        if (ImGui.CollapsingHeader("Connection Info", ImGui.TreeNodeFlags.DefaultOpen)) {
+            ImGui.Text("SESSION ID");
+            ImGui.SameLine();
+            ImGui.InputText("##SESSION ID", globalData.SESSION_ID, 256);
+
+            ImGui.Text("API URL");
+            ImGui.SameLine();
+            ImGui.InputText("##API URL", globalData.API_URL, 256);
+
+            ImGui.Text("WS URL");
+            ImGui.SameLine();
+            ImGui.InputText("##WS URL", globalData.WS_URL, 256);
+
+            ImGui.Text("Available Animations");
+            ImGui.SameLine();
+            if (ImGui.Combo("##Animation", globalData.SELECTED_ANIMATION, globalData.ANIMATIONS.join("\0") + "\0"))
+            {
+                console.log("Selected animation:", globalData.ANIMATIONS[globalData.SELECTED_ANIMATION[0]]);
+            }
+
+            if (ImGui.Button(globalData.connected[0] ? "Stop Session" : "Start Session")) {
+                globalData.connected[0] = !globalData.connected[0];
+
+                if (globalData.connected[0]) {
+                    console.log("Starting session...");
+                    sendPostRequest(`${globalData.API_URL}/sessions`, JSON.stringify({
+                        session_id: globalData.SESSION_ID[0],
+                        animation_file: globalData.ANIMATIONS[globalData.SELECTED_ANIMATION[0]]
+                    }));
+                    this.onCreateSessionCallback?.();
+                } else {
+                    console.log("Stopping session...");
+                    sendDeleteRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}`);
+                    this.onDeleteSessionCallback?.();
+                }
+            }
+        }
+
+        if (ImGui.CollapsingHeader("Animation Controls", ImGui.TreeNodeFlags.DefaultOpen)) {
+            if (ImGui.Button(globalData.play[0] ? "Pause" : "Play")) {
+                globalData.play[0] = !globalData.play[0];
+
+                if (globalData.play[0]) {
+                    console.log("Animation started");
+                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/play`, {});
+                } else {
+                    console.log("Animation paused");
+                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/pause`, {});
+                }
+            }
+        }
+
+        if (ImGui.CollapsingHeader("Others")) {
+            ImGui.Text("Hello, world!");
+            ImGui.Checkbox("Stop Rotation", this.stopRotation);
+            ImGui.Text("Rotate ? " + (this.stopRotation[0] ? "No" : "Yes"));
+
+            ImGui.ColorPicker3("cube.material.color", this.cubeColor);
+
+
+            if (ImGui.Button("Add BVH Skeleton")) {
+                console.log("Button clicked!");
+                AnimationClient.getInstance().AddClient();
+            }
+        }
+    }
 }
