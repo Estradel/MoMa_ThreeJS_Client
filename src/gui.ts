@@ -47,8 +47,10 @@ export class GUI {
                     sendPostRequest(`${globalData.API_URL}/sessions`, JSON.stringify({
                         session_id: globalData.SESSION_ID[0],
                         animation_file: globalData.ANIMATIONS[globalData.SELECTED_ANIMATION[0]]
-                    }));
-                    this.onCreateSessionCallback?.();
+                    })).then(_ => {
+                        this.onCreateSessionCallback?.();
+                    });
+
                 } else {
                     console.log("Stopping session...");
                     sendDeleteRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}`);
