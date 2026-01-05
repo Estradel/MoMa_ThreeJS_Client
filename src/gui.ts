@@ -60,6 +60,7 @@ export class GUI {
         }
 
         if (ImGui.CollapsingHeader("Animation Controls", ImGui.TreeNodeFlags.DefaultOpen)) {
+            ImGui.SeparatorText("Global");
             if (ImGui.Button(globalData.play[0] ? "Pause" : "Play")) {
                 globalData.play[0] = !globalData.play[0];
 
@@ -72,9 +73,29 @@ export class GUI {
                 }
             }
 
-            if (ImGui.SliderFloat("Playback Speed", globalData.playbackSpeed, 0.0, 10.0, "%.3f")) {
+            if (ImGui.SliderFloat("Playback Speed", globalData.playbackSpeed, 0.0, 10.0, "%.2f")) {
                 sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/speed`, JSON.stringify({
                     playback_speed: globalData.playbackSpeed[0]
+                }));
+            }
+
+
+            ImGui.SeparatorText("VAE");
+            if (ImGui.SliderFloat("Vae_1", globalData.vae_values[0], 0.0, 1.0, "%.2f")) {
+                sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/vae_values`, JSON.stringify({
+                    vae_values: globalData.vae_values.map(vae_float => vae_float[0])
+                }));
+            }
+
+            if (ImGui.SliderFloat("Vae_2", globalData.vae_values[1], 0.0, 1.0, "%.2f")) {
+                sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/vae_values`, JSON.stringify({
+                    vae_values: globalData.vae_values.map(vae_float => vae_float[0])
+                }));
+            }
+
+            if (ImGui.SliderFloat("Vae_3", globalData.vae_values[2], 0.0, 1.0, "%.2f")) {
+                sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/vae_values`, JSON.stringify({
+                    vae_values: globalData.vae_values.map(vae_float => vae_float[0])
                 }));
             }
         }

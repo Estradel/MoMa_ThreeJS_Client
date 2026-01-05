@@ -8,4 +8,5 @@ export interface GlobalData {
     connected: [boolean];
     cameraFollow: [boolean];
     playbackSpeed: [number];
+    vae_values: [[number], [number], [number]];
 }

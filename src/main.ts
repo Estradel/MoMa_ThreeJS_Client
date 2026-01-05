@@ -3,7 +3,7 @@ import {BvhSkeleton} from './BvhSkeleton';
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import Stats from "three/examples/jsm/libs/stats.module.js";
 import * as GUI from "./gui.ts";
-import {ImGuiImplWeb} from "@mori2003/jsimgui";
+import {ImGui, ImGuiImplWeb} from "@mori2003/jsimgui";
 import type {GlobalData} from "./DataInterface.ts";
 import {sendGetRequest, sendPostRequest} from "./tools.ts";
 
@@ -22,6 +22,7 @@ const globalData: GlobalData = {
     connected: [true],
     cameraFollow: [true],
     playbackSpeed: [1.0],
+    vae_values: [[0.5], [0.5], [0.5]]
 }
 
 const gui = new GUI.GUI();
@@ -55,6 +56,7 @@ async function init() {
     let session_id: string = globalData.SESSION_ID[0];
     const sessionInfo = await sendPostRequest(`${globalData.API_URL[0]}/sessions`, JSON.stringify({
         session_id: globalData.SESSION_ID[0],
+        session_type: "VAE",
         animation_file: "dance1_subject1.bvh"
     }))
 
@@ -133,7 +135,14 @@ async function init() {
 
         gui.render(globalData);
         if (bvhAnim && globalData.cameraFollow[0]) controls.target.copy(bvhAnim.bones[0].position);
-        controls.update();
+
+        // Mise à jour des contrôles uniquement si ImGui n'utilise pas la souris
+        if (ImGui.GetIO().WantCaptureMouse) {
+            controls.enabled = false; // Désactive la caméra
+        } else {
+            controls.enabled = true;  // Réactive la caméra
+        }
+
         renderer.render(scene, camera);
 
         stats.end();
