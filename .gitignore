@@ -81,6 +81,7 @@ web_modules/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
 .env.local
 
 # parcel-bundler cache (https://parceljs.org/)
@@ -229,4 +230,4 @@ fabric.properties
 !.idea/codeStyles
 !.idea/runConfigurations
 
-# End of https://www.toptal.com/developers/gitignore/api/webstorm+all,node
+# End of https://www.toptal.com/developers/gitignore/api/webstorm+all,node!/.env.production

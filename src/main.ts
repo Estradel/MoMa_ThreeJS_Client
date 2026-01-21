@@ -6,23 +6,17 @@ import * as GUI from "./gui.ts";
 import {ImGui, ImGuiImplWeb} from "@mori2003/jsimgui";
 import {type GlobalData, SESSION_TYPES} from "./DataInterface.ts";
 import {sendGetRequest, sendPostRequest} from "./tools.ts";
-import {Vector3} from "three";
-
-// Configuration
-const API_URL = "http://localhost:8000";
-const WS_URL = "ws://localhost:8000/ws";
-// const WS_URL = "ws://localhost:8766";
 
 const globalData: GlobalData = {
-    SESSION_ID: ["6543"],
-    SESSION_TYPE: [SESSION_TYPES.indexOf("VAE")],
-    API_URL: ["http://localhost:8000"],
-    WS_URL: ["ws://localhost:8000/ws"],
+    SESSION_ID: [String(import.meta.env.VITE_SESSION_ID)],
+    SESSION_TYPE: [SESSION_TYPES.indexOf(String(import.meta.env.VITE_SESSION_TYPE))],
+    API_URL: [`http://${String(import.meta.env.VITE_SERVER_IP)}:${String(import.meta.env.VITE_SERVER_PORT)}`],
+    WS_URL: [`ws://${String(import.meta.env.VITE_SERVER_IP)}:${String(import.meta.env.VITE_SERVER_PORT)}/ws`],
     ANIMATIONS: [""],
     SELECTED_ANIMATION: [0],
     play: [true],
     connected: [true],
-    cameraFollow: [true],
+    cameraFollow: [String(import.meta.env.VITE_CAMERA_FOLLOW).toLowerCase() === 'true'],
     playbackSpeed: [1.0],
     vae_values: [[0.5], [0.5], [0.5]]
 }
@@ -131,7 +125,7 @@ async function init() {
     await init_ws();
 
     // 5. Boucle de rendu
-    function animate() {
+    function animate(_time: number) {
 
         ImGuiImplWeb.BeginRender();
         stats.begin();
@@ -166,7 +160,7 @@ async function init() {
     gui.initialize(renderer.domElement).then(_ => {
         // Boucle de rendu
         renderer.setAnimationLoop(time => {
-            animate()
+            animate(time)
         });
     });
     gui.onDeleteSessionCallback = async () => {

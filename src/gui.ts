@@ -1,7 +1,6 @@
 ﻿// noinspection D
 
 import {ImGui, ImGuiImplWeb} from "@mori2003/jsimgui";
-import {AnimationClient} from "./network.ts";
 import {type GlobalData, SESSION_TYPES} from "./DataInterface.ts";
 import {sendDeleteRequest, sendPostRequest} from "./tools.ts";
 
@@ -50,7 +49,7 @@ export class GUI {
 
                 if (globalData.connected[0]) {
                     console.log("Starting session...");
-                    sendPostRequest(`${globalData.API_URL}/sessions`, JSON.stringify({
+                    sendPostRequest(`${globalData.API_URL[0]}/sessions`, JSON.stringify({
                         session_id: globalData.SESSION_ID[0],
                         session_type: SESSION_TYPES[globalData.SESSION_TYPE[0]],
                         animation_file: globalData.ANIMATIONS[globalData.SELECTED_ANIMATION[0]]
@@ -73,10 +72,10 @@ export class GUI {
 
                 if (globalData.play[0]) {
                     console.log("Animation started");
-                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/play`, {});
+                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/play`, "");
                 } else {
                     console.log("Animation paused");
-                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/pause`, {});
+                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/pause`, "");
                 }
             }
 
@@ -121,7 +120,6 @@ export class GUI {
 
             if (ImGui.Button("Add BVH Skeleton")) {
                 console.log("Button clicked!");
-                AnimationClient.getInstance().AddClient();
             }
         }
     }
