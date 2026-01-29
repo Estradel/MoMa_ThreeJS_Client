@@ -22,4 +22,4 @@ interface InfoModal {
 }
 
 export const SESSION_TYPES: readonly string[] = ["FK", "VAE"];
-export const SESSION_FPS: readonly number[] = [5, 10, 24, 30, 45, 60, 120, 240];
+export const SESSION_FPS: readonly number[] = [5, 10, 24, 30, 45, 60, 100, 120, 240, 480, 960, 1920];
