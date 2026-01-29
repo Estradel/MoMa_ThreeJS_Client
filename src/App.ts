@@ -221,7 +221,7 @@ export class App {
 
     this.bvhAnim = await BvhSkeleton.initialize(skeletonDef);
     this.scene.add(this.bvhAnim.root);
-    this.scene.add(this.bvhAnim.skinnedMeshRoot);
+    // this.scene.add(this.bvhAnim.skinnedMeshRoot);
     console.log(this.bvhAnim);
     console.log("Squelette construit.");
   }
