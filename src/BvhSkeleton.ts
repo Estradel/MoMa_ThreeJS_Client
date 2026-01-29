@@ -1,5 +1,5 @@
 ﻿import * as THREE from "three";
-import { Matrix4 } from "three";
+import { Matrix4, Scene } from "three";
 import type { SkeletonDef } from "./type.ts";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 
@@ -10,26 +10,24 @@ export class BvhSkeleton {
     THREE.Bone,
     THREE.Bone
   >();
-  public skinnedBonesToStreamedBonesMap: Map<THREE.Bone, THREE.Bone> = new Map<
-    THREE.Bone,
-    THREE.Bone
-  >();
+
+  private readonly scene: Scene;
 
   public root: THREE.Group;
   public skeleton: THREE.Skeleton;
   public bones: THREE.Bone[] = [];
 
-  private constructor(data: SkeletonDef) {
+  private constructor(data: SkeletonDef, scene: Scene) {
+    this.scene = scene;
+
     this.root = new THREE.Group();
     this.skinnedMeshRoot = new THREE.Group();
-    this.bones = [];
-    console.log(data.bone_names);
 
     // 1. Création des os
-    for (let i = 0; i < data.bone_names.length; i++) {
+    for (const boneName of data.bone_names) {
       const bone = new THREE.Bone();
-      bone.name = data.bone_names[i];
-      bone.add(new THREE.AxesHelper(3.0));
+      bone.name = boneName;
+      bone.add(new THREE.AxesHelper(3));
 
       this.bones.push(bone);
     }
@@ -65,11 +63,15 @@ export class BvhSkeleton {
 
     // Ajout d'un helper pour visualiser
     const helper = new THREE.SkeletonHelper(this.root);
+    helper.frustumCulled = false;
     this.root.add(helper);
   }
 
-  public static async initialize(data: SkeletonDef): Promise<BvhSkeleton> {
-    const instance = new BvhSkeleton(data);
+  public static async initialize(
+    data: SkeletonDef,
+    scene: Scene,
+  ): Promise<BvhSkeleton> {
+    const instance = new BvhSkeleton(data, scene);
 
     const loader = new FBXLoader();
     const loadedMesh: THREE.Group = await loader.loadAsync("bot.fbx");
@@ -87,9 +89,8 @@ export class BvhSkeleton {
     instance.skinnedBones = mainSkeleton!.bones;
 
     // Mapping des os streamés vers les os du skinned mesh
-    for (let i = 0; i < instance.bones.length; i++) {
-      const streamedBone = instance.bones[i];
-      let matchIndex = instance.skinnedBones.findIndex(
+    for (const streamedBone of instance.bones) {
+      const matchIndex = instance.skinnedBones.findIndex(
         (skinnedBone) =>
           skinnedBone.name.replace(/[^\w\s]/gi, "") ==
           streamedBone.name.replace(/[^\w\s]/gi, ""),
@@ -100,14 +101,10 @@ export class BvhSkeleton {
           streamedBone,
           instance.skinnedBones[matchIndex],
         );
-        instance.skinnedBonesToStreamedBonesMap.set(
-          instance.skinnedBones[matchIndex],
-          streamedBone,
-        );
       }
     }
 
-    for (let [
+    for (const [
       streamedBone,
       skinnedBone,
     ] of instance.streamedBonesToSkinnedBonesMap) {
@@ -115,6 +112,9 @@ export class BvhSkeleton {
       skinnedBone.quaternion.copy(streamedBone.quaternion);
       skinnedBone.scale.copy(streamedBone.scale);
     }
+
+    scene.add(instance.root);
+    scene.add(instance.skinnedMeshRoot);
 
     return instance;
   }
@@ -157,5 +157,10 @@ export class BvhSkeleton {
         skinnedBone.scale.copy(bone.scale);
       }
     }
+  }
+
+  dispose() {
+    this.scene.remove(this.root);
+    this.scene.remove(this.skinnedMeshRoot);
   }
 }

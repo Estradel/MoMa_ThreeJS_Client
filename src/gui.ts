@@ -1,154 +1,345 @@
 ﻿// noinspection D
 
-import {ImGui, ImGuiImplWeb, ImVec2} from "@mori2003/jsimgui";
-import {type GlobalData, SESSION_FPS, SESSION_TYPES} from "./DataInterface.ts";
-import {sendDeleteRequest, sendPostRequest} from "./tools.ts";
+import { ImGui, ImGuiImplWeb, ImVec2 } from "@mori2003/jsimgui";
+import {
+  type GlobalData,
+  SESSION_FPS,
+  SESSION_TYPES,
+} from "./DataInterface.ts";
+import { sendDeleteRequest, sendPostRequest } from "./tools.ts";
+import { BvhSkeleton } from "./BvhSkeleton.ts";
 
 export class GUI {
-    private stopRotation: [boolean] = [false];
-    private cubeColor: [number, number, number] = [0.0, 0.0, 0.5];
+  private stopRotation: [boolean] = [false];
+  private cubeColor: [number, number, number] = [0.0, 0.0, 0.5];
 
-    public onDeleteSessionCallback: (() => void) | null = null;
-    public onCreateSessionCallback: (() => void) | null = null;
+  public onDeleteSessionCallback: (() => void) | null = null;
+  public onCreateSessionCallback: (() => void) | null = null;
 
-    public async initialize(myCanvas: HTMLCanvasElement): Promise<void> {
-        await ImGuiImplWeb.Init({
-            canvas: myCanvas,
-            // device: myGPUDevice, // Required for WebGPU
-        });
-    }
+  public async initialize(myCanvas: HTMLCanvasElement): Promise<void> {
+    await ImGuiImplWeb.Init({
+      canvas: myCanvas,
+      // device: myGPUDevice, // Required for WebGPU
+    });
+  }
 
-    public render(globalData: GlobalData): void {
-        if (ImGui.Begin("MoMa ThreeJS Client", null, ImGui.WindowFlags.AlwaysAutoResize |
-            ImGui.WindowFlags.NoCollapse)) {
-            if (ImGui.CollapsingHeader("Connection Info", ImGui.TreeNodeFlags.DefaultOpen)) {
-                ImGui.Text("API URL");
-                ImGui.SameLine();
-                ImGui.InputText("##API URL", globalData.API_URL, 256);
+  public render(globalData: GlobalData): void {
+    if (
+      ImGui.Begin(
+        "MoMa ThreeJS Client",
+        null,
+        ImGui.WindowFlags.AlwaysAutoResize | ImGui.WindowFlags.NoCollapse,
+      )
+    ) {
+      if (
+        ImGui.CollapsingHeader(
+          "Connection Info",
+          ImGui.TreeNodeFlags.DefaultOpen,
+        )
+      ) {
+        ImGui.Text("API URL");
+        ImGui.SameLine();
+        ImGui.InputText("##API URL", globalData.API_URL, 256);
 
-                ImGui.Text("WS URL");
-                ImGui.SameLine();
-                ImGui.InputText("##WS URL", globalData.WS_URL, 256);
+        ImGui.Text("WS URL");
+        ImGui.SameLine();
+        ImGui.InputText("##WS URL", globalData.WS_URL, 256);
 
-                ImGui.Spacing();
-                ImGui.Spacing();
+        ImGui.Spacing();
+        ImGui.Spacing();
 
-                ImGui.Text("SESSION ID");
-                ImGui.SameLine();
-                ImGui.InputText("##SESSION ID", globalData.SESSION_ID, 256);
+        ImGui.Text("SESSION ID");
+        ImGui.SameLine();
+        ImGui.InputText("##SESSION ID", globalData.SESSION_ID, 256);
 
-                ImGui.Text("SESSION Type");
-                ImGui.SameLine();
-                if (ImGui.Combo("##Type", globalData.SESSION_TYPE, SESSION_TYPES.join("\0") + "\0")) {
-                    console.log("Selected Session Type:", SESSION_TYPES[globalData.SESSION_TYPE[0]]);
-                }
-
-                ImGui.Spacing();
-                ImGui.Spacing();
-
-                ImGui.Text("Available Animations");
-                ImGui.SameLine();
-                if (ImGui.Combo("##Animation", globalData.SELECTED_ANIMATION, globalData.ANIMATIONS.join("\0") + "\0")) {
-                    console.log("Selected animation:", globalData.ANIMATIONS[globalData.SELECTED_ANIMATION[0]]);
-                }
-
-                ImGui.Spacing();
-                ImGui.Spacing();
-
-                if (ImGui.Button(globalData.connected[0] ? "Stop Session" : "Start Session")) {
-                    globalData.connected[0] = !globalData.connected[0];
-
-                    if (globalData.connected[0]) {
-                        console.log("Starting session...");
-                        sendPostRequest(`${globalData.API_URL[0]}/sessions`, JSON.stringify({
-                            session_id: globalData.SESSION_ID[0],
-                            session_type: SESSION_TYPES[globalData.SESSION_TYPE[0]],
-                            animation_file: globalData.ANIMATIONS[globalData.SELECTED_ANIMATION[0]]
-                        })).then(_ => {
-                            this.onCreateSessionCallback?.();
-                        });
-
-                    } else {
-                        console.log("Stopping session...");
-                        sendDeleteRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}`);
-                        this.onDeleteSessionCallback?.();
-                    }
-                }
-            }
-
-            if (ImGui.CollapsingHeader("Animation Controls", ImGui.TreeNodeFlags.DefaultOpen)) {
-                ImGui.SeparatorText("Global");
-
-                const selectedFpsName = "FPS: " + (globalData.SESSION_FPS[0] >= 0 && globalData.SESSION_FPS[0] < SESSION_FPS.length ? SESSION_FPS[globalData.SESSION_FPS[0]] : "Unknown");
-                if (ImGui.SliderInt("FPS", globalData.SESSION_FPS, 0, SESSION_FPS.length-1, selectedFpsName))
-                {
-                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/fps`, JSON.stringify({
-                        fps: SESSION_FPS[globalData.SESSION_FPS[0]]
-                    }));
-                }
-
-                if (ImGui.SliderFloat("Playback Speed", globalData.playbackSpeed, 0.0, 10.0, "%.2fx")) {
-                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/speed`, JSON.stringify({
-                        playback_speed: globalData.playbackSpeed[0]
-                    }));
-                }
-
-                ImGui.Spacing();
-
-                if (ImGui.Button(globalData.play[0] ? "Pause" : "Play")) {
-                    globalData.play[0] = !globalData.play[0];
-
-                    if (globalData.play[0]) {
-                        console.log("Animation started");
-                        sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/play`, "");
-                    } else {
-                        console.log("Animation paused");
-                        sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/pause`, "");
-                    }
-                }
-
-                ImGui.InputTextMultiline("##source", globalData.infoText, globalData.infoText[0].length, new ImVec2(-1, 35), ImGui.InputTextFlags.ReadOnly);
-
-
-                ImGui.SeparatorText("VAE");
-                if (ImGui.SliderFloat("Vae_1", globalData.vae_values[0], 0.0, 1.0, "%.2f")) {
-                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/vae_values`, JSON.stringify({
-                        vae_values: globalData.vae_values.map(vae_float => vae_float[0])
-                    }));
-                }
-
-                if (ImGui.SliderFloat("Vae_2", globalData.vae_values[1], 0.0, 1.0, "%.2f")) {
-                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/vae_values`, JSON.stringify({
-                        vae_values: globalData.vae_values.map(vae_float => vae_float[0])
-                    }));
-                }
-
-                if (ImGui.SliderFloat("Vae_3", globalData.vae_values[2], 0.0, 1.0, "%.2f")) {
-                    sendPostRequest(`${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/vae_values`, JSON.stringify({
-                        vae_values: globalData.vae_values.map(vae_float => vae_float[0])
-                    }));
-                }
-            }
-
-            if (ImGui.CollapsingHeader("Camera Controls", ImGui.TreeNodeFlags.DefaultOpen)) {
-                ImGui.Checkbox("Camera Follow", globalData.cameraFollow);
-            }
-
-            if (ImGui.CollapsingHeader("Others")) {
-                ImGui.Text("Hello, world!");
-                ImGui.Checkbox("Stop Rotation", this.stopRotation);
-                ImGui.Text("Rotate ? " + (this.stopRotation[0] ? "No" : "Yes"));
-
-                ImGui.ColorPicker3("cube.material.color", this.cubeColor);
-
-
-                if (ImGui.Button("Add BVH Skeleton")) {
-                    console.log("Button clicked!");
-                }
-            }
+        ImGui.Text("SESSION Type");
+        ImGui.SameLine();
+        if (
+          ImGui.Combo(
+            "##Type",
+            globalData.SESSION_TYPE,
+            SESSION_TYPES.join("\0") + "\0",
+          )
+        ) {
+          console.log(
+            "Selected Session Type:",
+            SESSION_TYPES[globalData.SESSION_TYPE[0]],
+          );
         }
 
-        ImGui.End();
+        ImGui.Spacing();
+        ImGui.Spacing();
 
+        ImGui.Text("Available Animations");
+        ImGui.SameLine();
+        if (
+          ImGui.Combo(
+            "##Animation",
+            globalData.SELECTED_ANIMATION,
+            globalData.ANIMATIONS.join("\0") + "\0",
+          )
+        ) {
+          console.log(
+            "Selected animation:",
+            globalData.ANIMATIONS[globalData.SELECTED_ANIMATION[0]],
+          );
+        }
+
+        ImGui.Spacing();
+        ImGui.Spacing();
+
+        if (
+          ImGui.Button(
+            globalData.connected[0] ? "Stop Session" : "Start Session",
+          )
+        ) {
+          globalData.connected[0] = !globalData.connected[0];
+
+          if (globalData.connected[0]) {
+            console.log("Starting session...");
+            sendPostRequest(
+              `${globalData.API_URL[0]}/sessions`,
+              JSON.stringify({
+                session_id: globalData.SESSION_ID[0],
+                session_type: SESSION_TYPES[globalData.SESSION_TYPE[0]],
+                animation_file:
+                  globalData.ANIMATIONS[globalData.SELECTED_ANIMATION[0]],
+              }),
+            ).then(() => {
+              this.onCreateSessionCallback?.();
+            });
+          } else {
+            console.log("Stopping session...");
+            sendDeleteRequest(
+              `${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}`,
+            );
+            this.onDeleteSessionCallback?.();
+          }
+        }
+      }
+
+      if (
+        ImGui.CollapsingHeader(
+          "Animation Controls",
+          ImGui.TreeNodeFlags.DefaultOpen,
+        )
+      ) {
+        ImGui.SeparatorText("Global");
+
+        const selectedFpsName =
+          "FPS: " +
+          (globalData.SESSION_FPS[0] >= 0 &&
+          globalData.SESSION_FPS[0] < SESSION_FPS.length
+            ? SESSION_FPS[globalData.SESSION_FPS[0]]
+            : "Unknown");
+        if (
+          ImGui.SliderInt(
+            "FPS",
+            globalData.SESSION_FPS,
+            0,
+            SESSION_FPS.length - 1,
+            selectedFpsName,
+          )
+        ) {
+          sendPostRequest(
+            `${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/fps`,
+            JSON.stringify({
+              fps: SESSION_FPS[globalData.SESSION_FPS[0]],
+            }),
+          );
+        }
+
+        if (
+          ImGui.SliderFloat(
+            "Playback Speed",
+            globalData.playbackSpeed,
+            0.0,
+            10.0,
+            "%.2fx",
+          )
+        ) {
+          sendPostRequest(
+            `${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/speed`,
+            JSON.stringify({
+              playback_speed: globalData.playbackSpeed[0],
+            }),
+          );
+        }
+
+        ImGui.Spacing();
+
+        if (ImGui.Button(globalData.play[0] ? "Pause" : "Play")) {
+          globalData.play[0] = !globalData.play[0];
+
+          if (globalData.play[0]) {
+            console.log("Animation started");
+            sendPostRequest(
+              `${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/play`,
+              "",
+            );
+          } else {
+            console.log("Animation paused");
+            sendPostRequest(
+              `${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/pause`,
+              "",
+            );
+          }
+        }
+
+        ImGui.InputTextMultiline(
+          "##source",
+          globalData.infoText,
+          globalData.infoText[0].length,
+          new ImVec2(-1, 35),
+          ImGui.InputTextFlags.ReadOnly,
+        );
+
+        ImGui.SeparatorText("VAE");
+        if (
+          ImGui.SliderFloat("Vae_1", globalData.vae_values[0], 0.0, 1.0, "%.2f")
+        ) {
+          sendPostRequest(
+            `${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/vae_values`,
+            JSON.stringify({
+              vae_values: globalData.vae_values.map(
+                (vae_float) => vae_float[0],
+              ),
+            }),
+          );
+        }
+
+        if (
+          ImGui.SliderFloat("Vae_2", globalData.vae_values[1], 0.0, 1.0, "%.2f")
+        ) {
+          sendPostRequest(
+            `${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/vae_values`,
+            JSON.stringify({
+              vae_values: globalData.vae_values.map(
+                (vae_float) => vae_float[0],
+              ),
+            }),
+          );
+        }
+
+        if (
+          ImGui.SliderFloat("Vae_3", globalData.vae_values[2], 0.0, 1.0, "%.2f")
+        ) {
+          sendPostRequest(
+            `${globalData.API_URL[0]}/sessions/${globalData.SESSION_ID[0]}/vae_values`,
+            JSON.stringify({
+              vae_values: globalData.vae_values.map(
+                (vae_float) => vae_float[0],
+              ),
+            }),
+          );
+        }
+      }
+
+      if (
+        ImGui.CollapsingHeader(
+          "Camera Controls",
+          ImGui.TreeNodeFlags.DefaultOpen,
+        )
+      ) {
+        ImGui.Checkbox("Camera Follow", globalData.cameraFollow);
+      }
+
+      if (ImGui.CollapsingHeader("Others")) {
+        ImGui.Text("Hello, world!");
+        ImGui.Checkbox("Stop Rotation", this.stopRotation);
+        ImGui.Text("Rotate ? " + (this.stopRotation[0] ? "No" : "Yes"));
+
+        ImGui.ColorPicker3("cube.material.color", this.cubeColor);
+
+        if (ImGui.Button("Add BVH Skeleton")) {
+          console.log("Button clicked!");
+        }
+      }
     }
+
+    ImGui.End();
+  }
+
+  public renderSkeletonGUI(skeleton: BvhSkeleton): void {
+    const base_flags =
+      ImGui.TreeNodeFlags.DrawLinesFull | ImGui.TreeNodeFlags.DefaultOpen;
+
+    ImGui.SetNextWindowPos(
+      new ImVec2(ImGui.GetIO().DisplaySize.x - 50, 50),
+      ImGui.Cond.FirstUseEver,
+      new ImVec2(1.0, 0.0),
+    );
+    ImGui.SetNextWindowSize(new ImVec2(400, 600), ImGui.Cond.FirstUseEver);
+
+    if (
+      ImGui.Begin(
+        "Bones retargeting (Server bones -> Skinned Mesh bones)",
+        null,
+      )
+    ) {
+      ImGui.TextWrapped(
+        "Basic automatic retargeting based on name matching is done on initialization.",
+      );
+
+      if (ImGui.TreeNodeEx("Server bones", base_flags)) {
+        for (const bone of skeleton.bones) {
+          if (ImGui.TreeNodeEx(bone.name, base_flags)) {
+            const skinnedBone =
+              skeleton.streamedBonesToSkinnedBonesMap.get(bone)!;
+            const indexSkinnedBone = skeleton.skinnedBones.indexOf(skinnedBone);
+
+            // Layout responsive: une table 2 colonnes (label -> stretch petit, combo -> stretch grand).
+            // La combo remplit automatiquement la largeur dispo de sa colonne.
+            if (
+              ImGui.BeginTable(
+                `##RetargetRow_${bone.name}`,
+                2,
+                ImGui.TableFlags.SizingStretchSame,
+              )
+            ) {
+              ImGui.TableSetupColumn(
+                "ServerBone",
+                ImGui.TableColumnFlags.WidthStretch,
+                0.35,
+              );
+              ImGui.TableSetupColumn(
+                "SkinnedBone",
+                ImGui.TableColumnFlags.WidthStretch,
+                0.65,
+              );
+
+              ImGui.TableNextRow();
+
+              ImGui.TableSetColumnIndex(0);
+              ImGui.AlignTextToFramePadding();
+              ImGui.TextWrapped("Skinned bone");
+
+              ImGui.TableSetColumnIndex(1);
+              const selectedBone: [number] = [indexSkinnedBone];
+              ImGui.SetNextItemWidth(-1);
+              if (
+                ImGui.Combo(
+                  `##Combo${bone.name}`,
+                  selectedBone,
+                  skeleton.skinnedBones.map((bone) => bone.name).join("\0") +
+                    "\0",
+                )
+              ) {
+                skeleton.streamedBonesToSkinnedBonesMap.set(
+                  bone,
+                  skeleton.skinnedBones[selectedBone[0]],
+                );
+              }
+
+              ImGui.EndTable();
+            }
+
+            ImGui.TreePop();
+          }
+        }
+        ImGui.TreePop();
+      }
+    }
+    ImGui.End();
+  }
 }

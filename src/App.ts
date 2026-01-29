@@ -4,7 +4,11 @@ import Stats from "three/examples/jsm/libs/stats.module.js";
 import { ImGui, ImGuiImplWeb, ImVec2 } from "@mori2003/jsimgui";
 import { BvhSkeleton } from "./BvhSkeleton";
 import * as GUI from "./gui.ts";
-import { type GlobalData, SESSION_FPS, SESSION_TYPES } from "./DataInterface.ts";
+import {
+  type GlobalData,
+  SESSION_FPS,
+  SESSION_TYPES,
+} from "./DataInterface.ts";
 import { sendGetRequest, sendPostRequest } from "./tools.ts";
 
 /**
@@ -99,7 +103,7 @@ export class App {
       75,
       window.innerWidth / window.innerHeight,
       0.1,
-      1000,
+      2000,
     );
     camera.position.set(0, 150, 400);
     return camera;
@@ -219,9 +223,7 @@ export class App {
       `${this.globalData.API_URL[0]}/sessions/${this.sessionId}/skeleton`,
     );
 
-    this.bvhAnim = await BvhSkeleton.initialize(skeletonDef);
-    this.scene.add(this.bvhAnim.root);
-    // this.scene.add(this.bvhAnim.skinnedMeshRoot);
+    this.bvhAnim = await BvhSkeleton.initialize(skeletonDef, this.scene);
     console.log(this.bvhAnim);
     console.log("Squelette construit.");
   }
@@ -305,8 +307,7 @@ export class App {
 
     // Retirer le personnage de la scène
     if (this.bvhAnim) {
-      this.scene.remove(this.bvhAnim.root);
-      this.scene.remove(this.bvhAnim.skinnedMeshRoot);
+      this.bvhAnim.dispose();
       this.bvhAnim = null;
     }
 
@@ -331,14 +332,14 @@ export class App {
   /**
    * Boucle de rendu principale
    */
-  private animate(_time: number): void {
+  private animate(): void {
     ImGuiImplWeb.BeginRender();
     this.stats.begin();
 
     // Rendu du GUI
     this.gui.render(this.globalData);
     this.renderInfoModal();
-    // if (this.bvhAnim) this.gui.renderSkeletonGUI(this.bvhAnim);
+    if (this.bvhAnim) this.gui.renderSkeletonGUI(this.bvhAnim);
 
     // Suivi de la caméra si activé
     if (this.bvhAnim && this.globalData.cameraFollow[0]) {
@@ -400,7 +401,7 @@ export class App {
     await this.gui.initialize(this.renderer.domElement);
 
     // Démarrer la boucle de rendu
-    this.renderer.setAnimationLoop((time) => this.animate(time));
+    this.renderer.setAnimationLoop(() => this.animate());
 
     // Charger les animations disponibles
     await this.loadAnimations();
