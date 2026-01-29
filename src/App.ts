@@ -338,7 +338,7 @@ export class App {
     // Rendu du GUI
     this.gui.render(this.globalData);
     this.renderInfoModal();
-    if (this.bvhAnim) this.gui.renderSkeletonGUI(this.bvhAnim);
+    // if (this.bvhAnim) this.gui.renderSkeletonGUI(this.bvhAnim);
 
     // Suivi de la caméra si activé
     if (this.bvhAnim && this.globalData.cameraFollow[0]) {
